@@ -22,7 +22,7 @@ async def main():
         await asyncio.sleep(0.5)
         velocity = right_driver_data["velocity"]
         new_current = right_driver_data["motor_current"]
-        print(f"Current: {current}A | Velocity: {velocity:.3f} m/s | Read back: {new_current:.3f}A")
+        print(f"Current: {current}A | Velocity: {velocity:.3f} rad/s | Read back: {new_current:.3f}A")
 
     poll_task.cancel()
     

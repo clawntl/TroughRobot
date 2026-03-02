@@ -1,14 +1,62 @@
-#include <Arduino.h>
 #include <Wire.h>
+#include "stm32g4xx_hal.h"
 
 #include "i2c_register_map.h"
+
+
+#define REG_LED      0x03  // Set LED state
 
 volatile uint8_t currentRegister = 0;
 volatile bool registerSet = false;
 
+float target_current = 0.0;
+
 void receiveEvent(int howMany);
 void requestEvent();
-void rebootToDFU();
+
+void rebootToDFU() {
+    __disable_irq();
+
+    // Stop SysTick
+    SysTick->CTRL = 0;
+
+    // Deinit HAL (shuts down peripherals & interrupts)
+    HAL_RCC_DeInit();
+    HAL_DeInit();
+
+    // ---- Disable USB (STM32G431 version) ----
+
+    // Disable USB clock
+    RCC->APB1ENR1 &= ~RCC_APB1ENR1_USBEN;
+
+    // Reset USB peripheral
+    RCC->APB1RSTR1 |=  RCC_APB1RSTR1_USBRST;
+    RCC->APB1RSTR1 &= ~RCC_APB1RSTR1_USBRST;
+
+    // Reset USB pins PA11/PA12 to analog
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // Remap system memory to 0x00000000
+    SYSCFG->MEMRMP = SYSCFG_MEMRMP_MEM_MODE_0;
+
+    // System memory bootloader start
+    uint32_t bootAddr = 0x1FFF0000;
+
+    // Load stack pointer and reset vector
+    uint32_t sp = *(__IO uint32_t*)(bootAddr);
+    uint32_t rv = *(__IO uint32_t*)(bootAddr + 4);
+
+    // Set main stack pointer
+    __set_MSP(sp);
+
+    // Jump to bootloader
+    ((void (*)(void))rv)();
+}
 
 void float2bytesMSB(float val, uint8_t *bytes) {
     // Copy the raw bits of val into an integer so can perform
@@ -39,30 +87,32 @@ float bytes2floatMSB(const uint8_t *bytes) {
 }
 
 void setup() {
-  Serial.begin(115200);
+    Serial.begin(115200);
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
 
 
-  Wire.begin(I2C_ADDR);
-  Wire.setClock(400000);
-  Wire.onRequest(requestEvent);
-  Wire.onReceive(receiveEvent);
+    Wire.begin(I2C_ADDR);
+    Wire.setClock(400000);
+    Wire.onRequest(requestEvent);
+    Wire.onReceive(receiveEvent);
+
+  
 }
 
 void loop() {
-  // Serial trigger for DFU mode
-  if (Serial.available()) {
-      String cmd = Serial.readStringUntil('\n');
-      cmd.trim();
+  // --- SERIAL trigger ---
+    if (Serial.available()) {
+        String cmd = Serial.readStringUntil('\n');
+        cmd.trim();
 
-      if (cmd == "dfu") {
-          Serial.println("Entering DFU mode...");
-          delay(10);        // let USB send the message
-          rebootToDFU();
-      }
-  }
+        if (cmd == "dfu") {
+            Serial.println("Entering DFU mode...");
+            delay(10);        // let USB send the message
+            rebootToDFU();
+        }
+    }
 }
 
 
@@ -90,21 +140,17 @@ void receiveEvent(int howMany) {
 
     switch(currentRegister) {
       case REG_MOTOR_CURRENT:
-        if (index >= 4) {
-          float motorCurrent = bytes2floatMSB(buffer);
-          Serial.printf("Set motor current to %.2f A\n", motorCurrent);
-        } else {
-          Serial.println("Error: Not enough data for MOTOR_CURRENT");
-        }
-        // case REG_LED:
-        //     digitalWrite(LED_BUILTIN, buffer[0]);
+        target_current = bytes2floatMSB(buffer);
+        Serial.println("Received MOTOR_CURRENT: " + String(target_current, 3));
+        break;
+      case REG_LED:
+          digitalWrite(LED_BUILTIN, buffer[0]);
 
-        //     Serial.printf("LED %s\n", buffer[0] ? "ON" : "OFF");
-        //     break;
+          Serial.printf("LED %s\n", buffer[0] ? "ON" : "OFF");
+          break;
     }
   }
 }
-
 
 // function that executes whenever data is requested by master
 void requestEvent() {
@@ -115,21 +161,28 @@ void requestEvent() {
   
   // Respond based on the register that was set
   switch(currentRegister) {
-    // case REG_HELLO:
-    //   Wire.write("hello\n");
-    //   break;
       
     case REG_STATUS:
       Wire.write(0x42);  // Example status byte
       break;
-      
-    case REG_ENCODER_VELOCITY: {
-      float velocity = 0.0f;  // Replace with real encoder read
-      uint8_t bytes[4];
-      float2bytesMSB(velocity, bytes);
-      Wire.write(bytes, 4);
+
+    case REG_MOTOR_CURRENT: {
+      float current = target_current;
+      uint8_t data[4];
+      float2bytesMSB(current, data);
+      Serial.printf("Sending MOTOR_CURRENT: %#x %#x %#x %#x\n", data[0], data[1], data[2], data[3]);
+      Wire.write(data, 4);
       break;
-}
+    }
+
+    case REG_ENCODER_VELOCITY: {
+      float velocity = 3.14;  // Example velocity
+      uint8_t data[4];
+      float2bytesMSB(velocity, data);
+      Serial.printf("Sending ENCODER_VELOCITY: %#x %#x %#x %#x\n", data[0], data[1], data[2], data[3]);
+      Wire.write(data, 4);
+      break;
+    }
       
     default:
       Wire.write("???");

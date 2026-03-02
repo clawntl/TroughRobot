@@ -5,7 +5,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
-import struct
 from hardware.i2c_bus import bus, float2bytesMSB, bytes2floatMSB
 
 from config import Addresses, PollRates, STM32DriverRegs

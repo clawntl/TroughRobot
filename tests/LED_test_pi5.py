@@ -27,32 +27,32 @@ pixels1 = Pi5Pixelbuf(NEOPIXEL1, num_pixels, auto_write=True, byteorder="GRBW", 
 # --- Colours are set as (R, G, B, W) tuples ---
 
 while True:
-    # Fill all pixels with one colour
-    pixels1.fill((255, 0, 0, 0))    # Red
-    time.sleep(1)
+    # # Fill all pixels with one colour
+    # pixels1.fill((255, 0, 0, 0))    # Red
+    # time.sleep(1)
 
-    pixels1.fill((0, 255, 0, 0))    # Green
-    time.sleep(1)
+    # pixels1.fill((0, 255, 0, 0))    # Green
+    # time.sleep(1)
 
-    pixels1.fill((0, 0, 255, 0))    # Blue
-    time.sleep(1)
+    # pixels1.fill((0, 0, 255, 0))    # Blue
+    # time.sleep(1)
 
-    pixels1.fill((0, 0, 0, 255))    # White (W channel — most efficient)
-    time.sleep(1)
+    # pixels1.fill((0, 0, 0, 255))    # White (W channel — most efficient)
+    # time.sleep(1)
 
-    pixels1.fill((255, 0, 255, 0))  # Purple
-    time.sleep(1)
+    # pixels1.fill((255, 0, 255, 0))  # Purple
+    # time.sleep(1)
 
-    # Set individual pixels
-    pixels1[0] = (255, 100, 0, 0)   # Orange on pixel 0
-    pixels1[1] = (0, 0, 0, 128)     # Dim white on pixel 1
-    time.sleep(1)
+    # # Set individual pixels
+    # pixels1[0] = (255, 100, 0, 0)   # Orange on pixel 0
+    # pixels1[1] = (0, 0, 0, 128)     # Dim white on pixel 1
+    # time.sleep(1)
 
     # Change brightness on the fly
     pixels1.brightness = 0.05       # Very dim
-    pixels1.fill((255, 255, 255, 0))
-    time.sleep(1)
+    pixels1.fill((255, 255, 255, 255))
+    time.sleep(5)
 
     pixels1.brightness = 1.0        # Full blast
-    pixels1.fill((255, 255, 255, 0))
-    time.sleep(1)
+    pixels1.fill((255, 255, 255, 255))
+    time.sleep(5)
