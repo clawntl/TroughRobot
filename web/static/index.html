@@ -2,174 +2,338 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Slider WebSocket Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Tank Joystick Control</title>
     <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            /* Lock the page in place so touches never scroll the background */
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
         body {
             font-family: sans-serif;
-            margin: 1.5rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none;
+            min-height: 100dvh;   /* dynamic viewport height – accounts for mobile browser chrome */
         }
 
-        .slider-container {
-            margin-bottom: 2rem;
+        h1 {
+            margin: 0 0 0.4rem;
+            font-size: clamp(1.1rem, 5vw, 1.6rem);
         }
 
-        input[type="range"] {
-            -webkit-appearance: none; /* let us fully style it on iOS Safari */
-            appearance: none;
-            width: 100%;              /* full width of the screen */
-            max-width: 500px;         /* optional, keeps it tidy on desktop */
-            height: 32px;             /* larger touch area */
-            background: transparent;
+        #status {
+            margin-bottom: 0.75rem;
+            font-size: clamp(0.8rem, 3.5vw, 1rem);
+            color: #555;
+            text-align: center;
+            padding: 0 0.5rem;
         }
 
-        /* Track - WebKit (Safari / Chrome on iOS) */
-        input[type="range"]::-webkit-slider-runnable-track {
-            height: 12px;              /* thicker track for touch */
-            background: #ddd;
-            border-radius: 6px;
+        #joystick-wrapper {
+            position: relative;
+            /* Scale joystick to fit smaller screens */
+            width:  min(260px, 70vw);
+            height: min(260px, 70vw);
+            touch-action: none;
+            flex-shrink: 0;
         }
 
-        /* Thumb - WebKit */
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 32px;               /* larger thumb */
-            height: 32px;
+        #joystick-base {
+            position: absolute;
+            inset: 0;
             border-radius: 50%;
-            background: #007aff;       /* iOS blue style */
-            border: 2px solid #fff;
-            box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-            margin-top: -10px;         /* centre the thumb on 12px track [web:90] */
+            background: #e0e0e0;
+            border: 3px solid #bbb;
         }
 
-        /* Firefox track */
-        input[type="range"]::-moz-range-track {
-            height: 12px;
-            background: #ddd;
-            border-radius: 6px;
-        }
-
-        /* Firefox thumb */
-        input[type="range"]::-moz-range-thumb {
-            width: 32px;
-            height: 32px;
+        #joystick-thumb {
+            position: absolute;
+            /* Slightly larger for easier thumb targeting */
+            width:  clamp(72px, 22vw, 96px);
+            height: clamp(72px, 22vw, 96px);
             border-radius: 50%;
             background: #007aff;
-            border: 2px solid #fff;
-            box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+            border: 3px solid #fff;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+            transform: translate(-50%, -50%);
+            top: 50%;
+            left: 50%;
+            cursor: grab;
+            touch-action: none;
         }
 
-        .value {
-            font-size: 1.4rem;         /* easier to read */
-            margin-left: 0.75rem;
+        #joystick-thumb:active { cursor: grabbing; }
+
+        #joystick-base::before,
+        #joystick-base::after {
+            content: "";
+            position: absolute;
+            background: #ccc;
+        }
+        #joystick-base::before {
+            width: 1px; height: 100%;
+            left: 50%; top: 0;
+        }
+        #joystick-base::after {
+            height: 1px; width: 100%;
+            top: 50%; left: 0;
+        }
+
+        #track-values {
+            margin-top: 1rem;
+            font-size: clamp(1rem, 4vw, 1.2rem);
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        #controls {
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+            width: min(280px, 90vw);
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 0.75rem;
+            /* Allow horizontal pan on sliders without fighting the global touch block */
+            touch-action: pan-x;
+        }
+
+        .slider-row label {
+            font-size: clamp(0.85rem, 3.5vw, 0.95rem);
+            width: 90px;
+            flex-shrink: 0;
+        }
+
+        .slider-row input[type="range"] {
+            flex: 1;
+            /* Ensure iOS renders a proper range input */
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #ccc;
+            outline: none;
+            touch-action: pan-x;
+        }
+
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #007aff;
+            cursor: pointer;
+        }
+
+        .slider-row .slider-val {
+            font-size: clamp(0.85rem, 3.5vw, 0.95rem);
+            width: 35px;
+            text-align: right;
+            flex-shrink: 0;
         }
     </style>
-
 </head>
 <body>
-    <h1>Randomizer API Sliders</h1>
+    <h1>Tank Joystick Control</h1>
+    <div id="status">Connecting…</div>
 
-    <div class="slider-container">
-        <label for="slider1">Slider 1:</label>
-        <input type="range" id="slider1" min="-2.5" max="2.5" value="0" step="0.1">
-        <span id="slider1-value" class="value">0</span>
+    <div id="joystick-wrapper">
+        <div id="joystick-base"></div>
+        <div id="joystick-thumb"></div>
     </div>
 
-    <div class="slider-container">
-        <label for="slider2">Slider 2:</label>
-        <input type="range" id="slider2" min="-2.5" max="2.5" value="0" step="0.1">
-        <span id="slider2-value" class="value">0</span>
+    <div id="track-values">
+        Left track: <span id="val-left">0.0</span><br>
+        Right track: <span id="val-right">0.0</span>
     </div>
 
-    <div id="server-message">Waiting for server updates…</div>
+    <div id="controls">
+        <div class="slider-row">
+            <label for="slider-drive">Drive Max</label>
+            <input type="range" id="slider-drive" min="0" max="5" step="0.1" value="2.5">
+            <span class="slider-val" id="label-drive">2.5</span>
+        </div>
+        <div class="slider-row">
+            <label for="slider-turn">Turn Max</label>
+            <input type="range" id="slider-turn" min="0" max="10" step="0.1" value="5.0">
+            <span class="slider-val" id="label-turn">5.0</span>
+        </div>
+        <div class="slider-row">
+            <label for="slider-turn-exp">Forwards Small Turn Sensitivity</label>
+            <input type="range" id="slider-turn-exp" min="1" max="2.5" step="0.1" value="2">
+        <span class="slider-val" id="label-turn-exp">2.0</span>
+</div>
+
+    </div>
 
 <script>
-    const slider1 = document.getElementById("slider1");
-    const slider2 = document.getElementById("slider2");
-    const slider1Value = document.getElementById("slider1-value");
-    const slider2Value = document.getElementById("slider2-value");
-    const serverMessage = document.getElementById("server-message");
+    // Prevent ALL touch-driven scrolling/rubber-banding on the page background
+    document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
 
-    function updateLabels() {
-        slider1Value.textContent = Number(slider1.value).toFixed(1);
-        slider2Value.textContent = Number(slider2.value).toFixed(1);
+    const status     = document.getElementById("status");
+    const wrapper    = document.getElementById("joystick-wrapper");
+    const thumb      = document.getElementById("joystick-thumb");
+    const valLeft    = document.getElementById("val-left");
+    const valRight   = document.getElementById("val-right");
+
+    const sliderDrive = document.getElementById("slider-drive");
+    const sliderTurn  = document.getElementById("slider-turn");
+    const labelDrive  = document.getElementById("label-drive");
+    const labelTurn   = document.getElementById("label-turn");
+
+    // Recalculate dimensions after layout (needed on mobile where sizing is dynamic)
+    function getMetrics() {
+        const r = wrapper.offsetWidth / 2;
+        const thumbR = thumb.offsetWidth / 2;
+        return { RADIUS: r, MAX_TRAVEL: r - thumbR };
     }
 
-    // Your helper (not strictly required, but kept since you provided it)
-    function float2bytesMSB(val) {
-        const buffer = new ArrayBuffer(4);
-        const view = new DataView(buffer);
-        view.setFloat32(0, val, false); // big-endian [web:49]
-        const bytes = [
-            view.getUint8(0),
-            view.getUint8(1),
-            view.getUint8(2),
-            view.getUint8(3)
-        ];
-        return bytes;
+    let DRIVE_MAX = parseFloat(sliderDrive.value);
+    let TURN_MAX  = parseFloat(sliderTurn.value);
+
+    const sliderTurnExp  = document.getElementById("slider-turn-exp");
+    const labelTurnExp   = document.getElementById("label-turn-exp");
+
+    let TURN_EXP = parseFloat(sliderTurnExp.value);
+
+    sliderTurnExp.addEventListener("input", () => {
+        TURN_EXP = parseFloat(sliderTurnExp.value);
+        labelTurnExp.textContent = TURN_EXP.toFixed(1);
+    });
+
+    sliderDrive.addEventListener("input", () => {
+        DRIVE_MAX = parseFloat(sliderDrive.value);
+        labelDrive.textContent = DRIVE_MAX.toFixed(1);
+    });
+
+    sliderTurn.addEventListener("input", () => {
+        TURN_MAX = parseFloat(sliderTurn.value);
+        labelTurn.textContent = TURN_MAX.toFixed(1);
+    });
+
+    let joyX = 0, joyY = 0;
+    let isDragging = false;
+
+    function mixTracks(normX, normY) {
+        const drive = normY * DRIVE_MAX;
+        const turnInput = Math.sign(normX) * (Math.abs(normX) ** TURN_EXP);
+        const turn  = turnInput * TURN_MAX;
+        const clamp = (v) => Math.max(-TURN_MAX, Math.min(TURN_MAX, v));
+        return {
+            left:  clamp(drive + turn),
+            right: clamp(drive - turn),
+        };
     }
 
+    function setThumbPos(px, py) {
+        const { RADIUS, MAX_TRAVEL } = getMetrics();
+        const dist = Math.sqrt(px * px + py * py);
+        if (dist > MAX_TRAVEL) {
+            px = (px / dist) * MAX_TRAVEL;
+            py = (py / dist) * MAX_TRAVEL;
+        }
+        thumb.style.left = (RADIUS + px) + "px";
+        thumb.style.top  = (RADIUS + py) + "px";
+
+        joyX =  px / MAX_TRAVEL;
+        joyY = -py / MAX_TRAVEL;
+    }
+
+    function resetThumb() {
+        setThumbPos(0, 0);
+        joyX = 0; joyY = 0;
+    }
+
+    // Attach pointer events to the WRAPPER so the whole base area is draggable,
+    // not just the thumb – much easier to hit on mobile
+    function onPointerDown(e) {
+        isDragging = true;
+        // Capture on wrapper so pointermove fires even if pointer leaves element
+        wrapper.setPointerCapture(e.pointerId);
+        moveFromEvent(e);
+    }
+
+    function onPointerMove(e) {
+        if (!isDragging) return;
+        moveFromEvent(e);
+    }
+
+    function onPointerUp() {
+        isDragging = false;
+        resetThumb();
+    }
+
+    function moveFromEvent(e) {
+        const rect = wrapper.getBoundingClientRect();
+        const cx = rect.left + rect.width  / 2;
+        const cy = rect.top  + rect.height / 2;
+        setThumbPos(e.clientX - cx, e.clientY - cy);
+    }
+
+    wrapper.addEventListener("pointerdown",   onPointerDown);
+    wrapper.addEventListener("pointermove",   onPointerMove);
+    wrapper.addEventListener("pointerup",     onPointerUp);
+    wrapper.addEventListener("pointercancel", onPointerUp);
+
+    // ── WebSocket ────────────────────────────────────────────
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
-    ws.binaryType = "arraybuffer"; // receive binary as ArrayBuffer [web:49]
+    ws.binaryType = "arraybuffer";
 
-    ws.onopen = () => {
-        console.log("WebSocket opened");
-        serverMessage.textContent = "WebSocket connected";
-    };
+    ws.onopen  = () => { status.textContent = "Connected — waiting for role…"; };
+    ws.onerror = () => { status.textContent = "WebSocket error (see console)"; };
+    ws.onclose = () => { status.textContent = "WebSocket closed"; };
 
     ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-            const buffer = event.data;
-            const view = new DataView(buffer);
-
-            // Two float32 values, big-endian
-            const v1 = view.getFloat32(0, false); // offset 0 [web:49]
-            const v2 = view.getFloat32(4, false); // offset 4
-
-            serverMessage.textContent =
-                `Reply: slider1=${v1.toFixed(3)}, slider2=${v2.toFixed(3)}`;
-            console.log("Received float32:", v1, v2);
-        } else {
-            console.log("Unexpected non-binary message:", event.data);
+        if (typeof event.data === "string") {
+            status.textContent = event.data === "control"
+                ? "Live Control"
+                : "Observer Only | someone else has control | reload to take over when they disconnect";
         }
     };
 
-    ws.onerror = (event) => {
-        console.error("WebSocket error", event);
-        serverMessage.textContent = "WebSocket error (see console)";
-    };
-
-    ws.onclose = () => {
-        console.log("WebSocket closed");
-        serverMessage.textContent = "WebSocket closed";
-    };
+    // ── Send loop @ 10 Hz ────────────────────────────────────
+    let lastLeft = null, lastRight = null;
 
     function sendValues() {
-        if (ws.readyState !== WebSocket.OPEN) {
-            return;
-        }
+        if (ws.readyState !== WebSocket.OPEN) return;
 
-        const v1 = Number(slider1.value);
-        const v2 = Number(slider2.value);
+        const { left, right } = mixTracks(joyX, joyY);
 
-        // Pack two float32 values (big-endian) into 8 bytes
+        if (left === lastLeft && right === lastRight) return;
+        lastLeft = left; lastRight = right;
+
+        valLeft.textContent  = left.toFixed(2);
+        valRight.textContent = right.toFixed(2);
+
         const buffer = new ArrayBuffer(8);
-        const view = new DataView(buffer);
-        view.setFloat32(0, v1, false); // big-endian [web:49]
-        view.setFloat32(4, v2, false);
-
+        const view   = new DataView(buffer);
+        view.setFloat32(0, left,  false);
+        view.setFloat32(4, right, false);
         ws.send(buffer);
     }
 
-    slider1.addEventListener("input", updateLabels);
-    slider2.addEventListener("input", updateLabels);
-
-    updateLabels();
-
-    // Send current slider values every 0.1 seconds, regardless of movement
     setInterval(sendValues, 100);
 </script>
-
 </body>
 </html>

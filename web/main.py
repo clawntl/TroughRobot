@@ -17,16 +17,20 @@ app = FastAPI()
 BASE_DIR = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-
 @app.get("/")
 async def serve_index():
     return FileResponse(BASE_DIR / "static" / "index.html")
 
-SCALE = 10  # Ensure this is updated in JS as well
+# Controlling user slot - others are observers
+active_controller: WebSocket | None = None
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global active_controller # variable inserted for user selection
     await websocket.accept()
+    is_controller = active_controller is None
+    if is_controller: active_controller = websocket 
+    await websocket.send_text("control" if is_controller else "observe")  # ADD
     print("WebSocket connected")
     try:
         while True:
@@ -42,11 +46,22 @@ async def websocket_endpoint(websocket: WebSocket):
             # v1 and v2 are Python floats in the original range, with float32 precision
             # print(f"Received floats: slider1={v1}, slider2={v2}")
 
-            await update_motor_currents(raw[0:4],raw[4:8])
-            # print(f"Received floats: slider1={list(raw[0:4])}, slider2={list(raw[4:8])}")
+            if is_controller: # if the active controller user
+                await update_motor_currents(raw[0:4],raw[4:8])
+                # print(f"Received floats: slider1={list(raw[0:4])}, slider2={list(raw[4:8])}")
+            
         
             # Echo back the same two float32 values
             # reply = struct.pack("!ff", v1, v2)
             # await websocket.send_bytes(reply)
     except WebSocketDisconnect:
+        
         print("WebSocket disconnected")
+
+    finally: # on intended or unintended disconnect
+        # Zero both motor velocities on disconnect
+        zero = struct.pack("!f", 0.0)
+        await update_motor_currents(list(zero), list(zero))
+        print("Motors zeroed on Disconnect")
+        # Give up/release control
+        if is_controller: active_controller = None
