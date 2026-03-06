@@ -15,7 +15,7 @@ motor_currents = {
 
 async def update_motor_currents(current_left: list[int], current_right: list[int]):
     motor_currents["left"] = bytes2floatMSB(current_left)
-    motor_currents["right"] = bytes2floatMSB(current_right)
+    motor_currents["right"] = -bytes2floatMSB(current_right)
 
     print(f"Updated motor currents: {motor_currents}")
 
