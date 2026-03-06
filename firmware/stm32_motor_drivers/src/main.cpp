@@ -248,7 +248,7 @@ void setupFOC() {
     printDRV8316Status();
 
 
-    motor.current_limit = 2.5;   // [Amps]
+    motor.current_limit = 5;   // [Amps]
 
     current_sense.linkDriver(&driver);
 
